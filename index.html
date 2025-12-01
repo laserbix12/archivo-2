@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRUD Javascript - Gift Cards (Básico)</title>
+    <!-- Bootstrap CSS (solo para el layout y botones neutros) -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome para iconos -->
+    <script src="https://kit.fontawesome.com/b5a5b5463f.js" crossorigin="anonymous"></script>
+    
+    <style>
+        /* Estilos neutros para los encabezados */
+        .card-header-neutro {
+            background-color: #f8f9fa; /* Color de fondo muy claro (gris) */
+            border-bottom: 1px solid #dee2e6;
+        }
+        .table thead th {
+            border-bottom: 2px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container my-5">
+        <h1 class="text-center mb-4">Gestión de Gift Cards</h1>
+        
+        <!-- Formulario para Agregar/Editar Gift Card -->
+        <div class="card mb-4 border">
+            <div class="card-header card-header-neutro">
+                <h5 class="mb-0">Formulario de Gift Card</h5>
+            </div>
+            <div class="card-body">
+                <form id="form-gift">
+                    <!-- Campo oculto para guardar el ID si estamos editando -->
+                    <input type="hidden" id="gift-id" value=""> 
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="gift" class="form-label">Nombre del Gift</label>
+                            <input type="text" class="form-control" id="gift" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="tipo" class="form-label">Tipo</label>
+                            <select class="form-select" id="tipo" required>
+                                <option value="">Seleccione...</option>
+                                <option value="Suscripción">Suscripción</option>
+                                <option value="Compra">Compra</option>
+                                <option value="Servicio">Servicio</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="tiempo" class="form-label">Tiempo</label>
+                            <input type="text" class="form-control" id="tiempo" placeholder="Ej: Un mes" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="precio" class="form-label">Precio</label>
+                            <input type="number" class="form-control" id="precio" step="0.01" required>
+                        </div>
+                        
+                        <div class="col-12 d-flex justify-content-end">
+                            <!-- Botón Cancelar (neutro) -->
+                            <button type="button" class="btn btn-light border me-2" id="btn-cancelar" style="display:none;">
+                                Cancelar
+                            </button>
+                            <!-- Botón principal (oscuro/neutro) -->
+                            <button type="submit" class="btn btn-dark" id="btn-submit">
+                                <i class="fas fa-plus"></i> Agregar Gift Card
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tabla de Gift Cards -->
+        <div class="card border">
+            <div class="card-header card-header-neutro">
+                <h5 class="mb-0">Lista de Gift Cards</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Gift</th>
+                                <th>Tipo</th>
+                                <th>Tiempo</th>
+                                <th>Precio</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cuerpo-tabla">
+                            <!-- Las filas se cargarán dinámicamente con JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Lógica JavaScript (CRUD y LocalStorage) -->
+    <script>
+        // Arreglo donde se guardan las Gift Cards en memoria
+        let giftCards = []; 
+
+        // Referencias a elementos del DOM
+        const formGift = document.getElementById('form-gift');
+        const cuerpoTabla = document.getElementById('cuerpo-tabla');
+        const btnSubmit = document.getElementById('btn-submit');
+        const btnCancelar = document.getElementById('btn-cancelar');
+
+        // Inicializa la aplicación
+        document.addEventListener('DOMContentLoaded', cargarDatosIniciales);
+        formGift.addEventListener('submit', manejarSubmit);
+        btnCancelar.addEventListener('click', limpiarFormulario);
+
+        // ----------------------------------------------------
+        // FUNCIONES DE PERSISTENCIA (LocalStorage)
+        // ----------------------------------------------------
+
+        function cargarDatosIniciales() {
+            const storageData = localStorage.getItem('giftCards');
+
+            if (storageData) {
+                giftCards = JSON.parse(storageData);
+            } else {
+                // Datos de ejemplo si no hay nada guardado
+                giftCards = [
+                    { id: Date.now() + 1, nombre: "Anual Pro", tipo: "Suscripción", tiempo: "1 año", precio: 120.00 },
+                    { id: Date.now() + 2, nombre: "Crédito $25", tipo: "Compra", tiempo: "N/A", precio: 25.00 }
+                ];
+                guardarGifts();
+            }
+            
+            renderizarLista();
+        }
+
+        // Guarda el arreglo actual 'giftCards' en LocalStorage
+        function guardarGifts() {
+            localStorage.setItem('giftCards', JSON.stringify(giftCards));
+        }
+
+        // ----------------------------------------------------
+        // MANEJO DE FORMULARIO (CREATE y UPDATE)
+        // ----------------------------------------------------
+
+        function manejarSubmit(e) {
+            e.preventDefault(); // Evita que la página se recargue
+
+            // 1. Capturar datos del formulario
+            const id = document.getElementById('gift-id').value;
+            const nombre = document.getElementById('gift').value;
+            const tipo = document.getElementById('tipo').value;
+            const tiempo = document.getElementById('tiempo').value;
+            const precio = parseFloat(document.getElementById('precio').value);
+
+            // Validación básica
+            if (nombre.trim() === '' || tipo === '' || tiempo.trim() === '' || isNaN(precio) || precio <= 0) {
+                 // Utilizamos el sistema de validación de Bootstrap o simplemente un mensaje en consola
+                 console.error("Por favor, completa todos los campos correctamente.");
+                 return;
+            }
+
+            const datosGift = { nombre, tipo, tiempo, precio };
+
+            if (id) {
+                // Modo UPDATE (Actualizar)
+                actualizarGiftCard(id, datosGift);
+            } else {
+                // Modo CREATE (Crear)
+                crearGiftCard(datosGift);
+            }
+
+            limpiarFormulario();
+        }
+
+        function crearGiftCard(datos) {
+            const newGift = {
+                id: Date.now(), // ID único basado en el tiempo actual
+                ...datos
+            };
+            giftCards.push(newGift);
+            guardarGifts();
+            renderizarLista();
+        }
+
+        function actualizarGiftCard(id, datos) {
+            const idNum = parseInt(id);
+            const index = giftCards.findIndex(g => g.id === idNum);
+
+            if (index !== -1) {
+                giftCards[index] = { id: idNum, ...datos };
+                guardarGifts();
+                renderizarLista();
+            }
+        }
+
+        // ----------------------------------------------------
+        // FUNCIÓN DELETE (Eliminar)
+        // ----------------------------------------------------
+
+        window.eliminarGiftCard = function(id) {
+            // Reemplazo de 'confirm()' por una lógica simple de modal o manejo visual si estuviéramos en producción.
+            // Para este ejemplo básico, mantenemos la funcionalidad del navegador.
+            if (!window.confirm('¿Estás seguro de que quieres eliminar esta Gift Card?')) return; 
+            
+            const idNum = parseInt(id);
+            // Filtra la lista para excluir el elemento con el ID dado
+            giftCards = giftCards.filter(g => g.id !== idNum);
+            
+            guardarGifts();
+            renderizarLista();
+        }
+
+        // ----------------------------------------------------
+        // MANEJO DE INTERFAZ (UI) y READ
+        // ----------------------------------------------------
+
+        function renderizarLista() {
+            cuerpoTabla.innerHTML = ''; // Limpia el contenido
+
+            giftCards.forEach(gift => {
+                const fila = document.createElement('tr');
+                fila.innerHTML = `
+                    <td>${gift.nombre}</td>
+                    <td>${gift.tipo}</td>
+                    <td>${gift.tiempo}</td>
+                    <td>$${gift.precio.toFixed(2)}</td>
+                    <td>
+                        <!-- Botones de acción neutros (outline-dark) -->
+                        <button class="btn btn-sm btn-outline-dark me-2" onclick="cargarParaEdicion(${gift.id})">
+                            <i class="fas fa-edit"></i> Editar
+                        </button>
+                        <button class="btn btn-sm btn-outline-dark" onclick="eliminarGiftCard(${gift.id})">
+                            <i class="fas fa-trash-alt"></i> Eliminar
+                        </button>
+                    </td>
+                `;
+                cuerpoTabla.appendChild(fila);
+            });
+        }
+
+        // Carga los datos al formulario para la edición
+        window.cargarParaEdicion = function(id) {
+            const gift = giftCards.find(g => g.id === id);
+
+            if (gift) {
+                // Rellena los campos
+                document.getElementById('gift-id').value = gift.id;
+                document.getElementById('gift').value = gift.nombre;
+                document.getElementById('tipo').value = gift.tipo;
+                document.getElementById('tiempo').value = gift.tiempo;
+                document.getElementById('precio').value = gift.precio;
+                
+                // Cambia la UI
+                btnSubmit.innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
+                btnSubmit.classList.remove('btn-dark');
+                btnSubmit.classList.add('btn-light', 'border'); // Botón de guardar neutro
+                btnCancelar.style.display = 'inline-block';
+                
+                // Desplaza la vista hacia el formulario
+                document.querySelector('.card-header').scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        function limpiarFormulario() {
+            formGift.reset(); // Limpia todos los campos del formulario
+            document.getElementById('gift-id').value = ''; // Limpia el ID oculto
+            
+            // Restaura la UI al modo "Agregar"
+            btnSubmit.innerHTML = '<i class="fas fa-plus"></i> Agregar Gift Card';
+            btnSubmit.classList.remove('btn-light', 'border');
+            btnSubmit.classList.add('btn-dark');
+            btnCancelar.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
